@@ -1,69 +1,62 @@
-include stdlib
+# Script that configures Nginx server with some folders and files
 
-# Update package lists
-exec { 'Update lists':
-    command => '/usr/bin/apt update'
+exec {'update':
+  provider => shell,
+  command  => 'sudo apt-get -y update',
+  before   => Exec['install Nginx'],
 }
 
-# Install Nginx
-package { 'nginx':
-    ensure  => 'present',
-    require => Exec['Update lists']
+exec {'install Nginx':
+  provider => shell,
+  command  => 'sudo apt-get -y install nginx',
+  before   => Exec['start Nginx'],
 }
 
-# Create the directory tree
-exec { 'Create Directory Tree':
-    command => '/bin/mkdir -p /data/web_static/releases/test /data/web_static/shared',
-    require => Package['nginx']
+exec {'start Nginx':
+  provider => shell,
+  command  => 'sudo service nginx start',
+  before   => Exec['create first directory'],
 }
 
-$head = "  <head>\n  </head>"
-$body = "  <body>\n    Holberton School\n  </body>"
-$index = "<html>\n${head}\n${body}\n</html>\n"
-
-# Create a fake HTML file with simple content,
-# to test Nginx configuration
-file { 'Create Fake HTML':
-    ensure  => 'present',
-    path    => '/data/web_static/releases/test/index.html',
-    content => $index,
-    require => Exec['Create Directory Tree']
+exec {'create first directory':
+  provider => shell,
+  command  => 'sudo mkdir -p /data/web_static/releases/test/',
+  before   => Exec['create second directory'],
 }
 
-# Create a symbolic link '/data/web_static/current' linked to the
-# '/data/web_static/releases/test/' folder.
-file { 'Create Symbolic Link':
-    ensure  => 'link',
-    path    => '/data/web_static/current',
-    force   => true,
-    target  => '/data/web_static/releases/test',
-    require => File['Create Fake HTML']
+exec {'create second directory':
+  provider => shell,
+  command  => 'sudo mkdir -p /data/web_static/shared/',
+  before   => Exec['content into html'],
 }
 
-# Ensures that Nginx is running
-service { 'nginx':
-    ensure  => 'running',
-    enable  => true,
-    require => Package['nginx']
+exec {'content into html':
+  provider => shell,
+  command  => 'echo "Holberton School" | sudo tee /data/web_static/releases/test/index.html',
+  before   => Exec['symbolic link'],
 }
 
-# Set permissions for 'ubuntu' user
-exec { 'Set permissions':
-    command => '/bin/chown -R ubuntu:ubuntu /data',
-    require => File['Create Symbolic Link']
+exec {'symbolic link':
+  provider => shell,
+  command  => 'sudo ln -sf /data/web_static/releases/test/ /data/web_static/current',
+  before   => Exec['put location'],
 }
 
-# Set a new location for a Nginx VHost 
-$loc_header='location /hbnb_static/ {'
-$loc_content='alias /data/web_static/current/;'
-$new_location="\n\t${loc_header}\n\t\t${loc_content}\n\t}\n"
+exec {'put location':
+  provider => shell,
+  command  => 'sudo sed -i \'38i\\tlocation /hbnb_static/ {\n\t\talias /data/web_static/current/;\n\t\tautoindex off;\n\t}\n\' /etc/nginx/sites-available/default',
+  before   => Exec['restart Nginx'],
+}
 
-# Write the new location to the default Nginx VHost
-file_line { 'Set Nginx Location':
-    ensure  => 'present',
-    path    => '/etc/nginx/sites-available/default',
-    after   => 'server_name \_;',
-    line    => $new_location,
-    notify  => Service['nginx'],
-    require => Exec['Set permissions']
+exec {'restart Nginx':
+  provider => shell,
+  command  => 'sudo service nginx restart',
+  before   => File['/data/']
+}
+
+file {'/data/':
+  ensure  => directory,
+  owner   => 'ubuntu',
+  group   => 'ubuntu',
+  recurse => true,
 }

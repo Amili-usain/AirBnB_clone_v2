@@ -1,5 +1,6 @@
 # 0x04. AirBnB clone - Web framework
 
+![hbnb_step3](https://user-images.githubusercontent.com/107358517/216756291-e6961af6-013f-4382-9dda-f16a7b0d4fdc.png)
 
 
 # Learning Objectives
